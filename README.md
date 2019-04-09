@@ -9,8 +9,8 @@
     <a href="https://ibm-swift.github.io/Kitura-WebSocket/index.html">
     <img src="https://img.shields.io/badge/apidoc-KituraWebSocket-1FBCE4.svg?style=flat" alt="APIDoc">
     </a>
-    <a href="https://travis-ci.org/IBM-Swift/Kitura-WebSocket">
-    <img src="https://travis-ci.org/IBM-Swift/Kitura-WebSocket.svg?branch=master" alt="Build Status - Master">
+    <a href="https://travis-ci.org/IBM-Swift/Kitura-WebSocket-NIO">
+    <img src="https://travis-ci.org/IBM-Swift/Kitura-WebSocket-NIO.svg?branch=master" alt="Build Status - Master">
     </a>
     <img src="https://img.shields.io/badge/os-macOS-green.svg?style=flat" alt="macOS">
     <img src="https://img.shields.io/badge/os-linux-green.svg?style=flat" alt="Linux">
@@ -20,19 +20,21 @@
     </a>
 </p>
 
-# Kitura-WebSocket
+# Kitura-WebSocket-NIO
 
-Kitura-WebSocket provides Kitura based servers the ability to receive and send messages to clients using the WebSocket
+Kitura-WebSocket-NIO is a [swift-nio](https://github.com/apple/swift-nio) based immplementation of the [Kitura-WebSocket](https://github.com/IBM-Swift/Kitura-WebSocket) API. It provides Kitura based servers the ability to receive and send messages to clients using the WebSocket
 protocol (RFC 6455). It is compatible with a variety of WebSocket clients, including:
 - The built-in WebSocket support in the Chrome, FireFox, and Safari browsers.
 - The NPM [websocket](https://www.npmjs.com/package/websocket) package.
 
-Kitura-WebSocket supports version thirteen of the WebSocket protocol.
+Kitura-WebSocket-NIO supports version thirteen of the WebSocket protocol.
 
 Both the WS and WSS (SSL/TLS secured WS) protocols are supported by Kitura-WebSocket.
 To enable WSS set up your Kitura based server for SSL/TLS support. See the tutorial
 [Enabling SSL/TLS on your Kitura server](https://www.kitura.io/guides/building/ssl.html) on
 [www.kitura.io](http://www.kitura.io) for details.
+
+Kitura-WebSocket-NIO also supports WebSocket compression using the permessage-deflate algorithm, adhering to [RFC 7692](https://tools.ietf.org/html/rfc7692) as much as possible.
 
 ## Table of Contents
 * [Usage](#usage)
@@ -48,10 +50,10 @@ To enable WSS set up your Kitura based server for SSL/TLS support. See the tutor
 
 #### Add dependencies
 
-Add the `Kitura-WebSocket` package to the dependencies within your application’s `Package.swift` file. Substitute `"x.x.x"` with the latest `Kitura-WebSocket` [release](https://github.com/IBM-Swift/Kitura-WebSocket/releases).
+Add the `Kitura-WebSocket-NIO` package to the dependencies within your application’s `Package.swift` file. Substitute `"x.x.x"` with the latest `Kitura-WebSocket-NIO` [release](https://github.com/IBM-Swift/Kitura-WebSocket-NIO/releases).
 
 ```swift
-.package(url: "https://github.com/IBM-Swift/Kitura-WebSocket.git", from: "x.x.x")
+.package(url: "https://github.com/IBM-Swift/Kitura-WebSocket-NIO.git", from: "x.x.x")
 ```
 
 Add `Kitura-WebSocket` to your target's dependencies:
@@ -136,7 +138,7 @@ WebSocket.unregister(path: String)
 This function is passed the path which the `WebSocketService` being unregistered was registered on.
 
 ## Autobahn TestSuite
-Kitura-WebSocket complies to the [Autobahn Testsuite](https://github.com/crossbario/autobahn-testsuite) for web sockets. To create an echo server and run this test suite against it, follow the instructions [here](https://github.com/IBM-Swift/Kitura-WebSocket/blob/master/AutobahnTests.md).
+Kitura-WebSocket-NIO fully complies to the [Autobahn Testsuite](https://github.com/crossbario/autobahn-testsuite) for web sockets. To create an echo server and run this test suite against it, follow the instructions [here](https://github.com/IBM-Swift/Kitura-WebSocket-NIO/blob/master/AutobahnTests.md).
 
 ## Example - Simple
 This example is a simplistic chat service to demonstrate how to use the Kitura-WebSocket APIs.
@@ -160,7 +162,7 @@ ServerDirectory
         └── main.swift
 </pre>
 
-Create a `Package.swift` file with the following content, substituting `"x.x.x"` with the latest releases of Kitura, HeliumLogger and Kitura-WebSocket:
+Create a `Package.swift` file with the following content, substituting `"x.x.x"` with the latest releases of Kitura, HeliumLogger and Kitura-WebSocket-NIO:
 ```swift
 // swift-tools-version:4.0
 import PackageDescription
@@ -170,7 +172,7 @@ let package = Package(
     dependencies: [
          .package(url: "https://github.com/IBM-Swift/Kitura.git", .upToNextMinor(from: "x.x.x")),
          .package(url: "https://github.com/IBM-Swift/HeliumLogger.git", from: "x.x.x"),
-         .package(url: "https://github.com/IBM-Swift/Kitura-WebSocket.git", from: "x.x.x")
+         .package(url: "https://github.com/IBM-Swift/Kitura-WebSocket-NIO.git", from: "x.x.x")
     ],
     targets: [
         .target(
@@ -394,4 +396,4 @@ For more information visit our [API reference](https://ibm-swift.github.io/Kitur
 We love to talk server-side Swift, and Kitura. Join our [Slack](http://swift-at-ibm-slack.mybluemix.net/) to meet the team!
 
 ## License
-This library is licensed under Apache 2.0. Full license text is available in [LICENSE](https://github.com/IBM-Swift/Kitura-WebSocket/blob/master/LICENSE.txt).
+This library is licensed under Apache 2.0. Full license text is available in [LICENSE](https://github.com/IBM-Swift/Kitura-WebSocket-NIO/blob/master/LICENSE.txt).

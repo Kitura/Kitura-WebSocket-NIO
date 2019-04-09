@@ -23,7 +23,7 @@ let package = Package(
     dependencies: [
          .package(url: "https://github.com/IBM-Swift/Kitura.git", from: "2.3.0"),
          .package(url: "https://github.com/IBM-Swift/HeliumLogger.git", .upToNextMinor(from: "1.7.0")),
-         .package(url: "https://github.com/IBM-Swift/Kitura-WebSocket.git", from: "2.0.0")
+         .package(url: "https://github.com/IBM-Swift/Kitura-WebSocket-NIO.git", from: "2.0.0")
     ],
     targets: [
     .target(
