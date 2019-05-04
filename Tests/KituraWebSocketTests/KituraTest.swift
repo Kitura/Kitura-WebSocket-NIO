@@ -78,16 +78,17 @@ class KituraTest: XCTestCase {
     }
 
     func performTest(framesToSend: [(Bool, Int, NSData)], masked: [Bool] = [],
-                     expectedFrames: [(Bool, Int, NSData)], expectation: XCTestExpectation, compressed: Bool = false) {
+                     expectedFrames: [(Bool, Int, NSData)], expectation: XCTestExpectation,
+                     negotiateCompression: Bool = false, compressed: Bool = false) {
         precondition(masked.count == 0 || framesToSend.count == masked.count)
         let upgraded = DispatchSemaphore(value: 0)
-        guard let channel = sendUpgradeRequest(toPath: servicePath, usingKey: secWebKey, semaphore: upgraded, compressed: compressed) else { return }
+        guard let channel = sendUpgradeRequest(toPath: servicePath, usingKey: secWebKey, semaphore: upgraded, negotiateCompression: negotiateCompression) else { return }
         upgraded.wait()
         do {
             _ = try channel.pipeline.removeHandler(httpRequestEncoder!).wait()
             _ = try channel.pipeline.removeHandler(httpResponseDecoder!).wait()
             _ = try channel.pipeline.removeHandler(httpHandler!).wait()
-            try channel.pipeline.addHandler(WebSocketClientHandler(expectedFrames: expectedFrames, expectation: expectation, compressed: compressed), position: .first).wait()
+            try channel.pipeline.addHandler(WebSocketClientHandler(expectedFrames: expectedFrames, expectation: expectation, compressed: negotiateCompression), position: .first).wait()
         } catch let error {
            Log.error("Error: \(error)")
         }
@@ -111,7 +112,7 @@ class KituraTest: XCTestCase {
         }
     }
 
-    func sendUpgradeRequest(forProtocolVersion: String? = "13", toPath: String, usingKey: String?, semaphore: DispatchSemaphore, errorMessage: String? = nil, compressed: Bool = false) -> Channel? {
+    func sendUpgradeRequest(forProtocolVersion: String? = "13", toPath: String, usingKey: String?, semaphore: DispatchSemaphore, errorMessage: String? = nil, negotiateCompression: Bool = false) -> Channel? {
         self.httpHandler = HTTPResponseHandler(key: usingKey ?? "", semaphore: semaphore, errorMessage: errorMessage)
         let clientBootstrap = ClientBootstrap(group: MultiThreadedEventLoopGroup(numberOfThreads: 1))
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEPORT), value: 1)
@@ -130,7 +131,7 @@ class KituraTest: XCTestCase {
             if let key = usingKey {
                 headers.add(name: "Sec-WebSocket-Key", value: key)
             }
-            if compressed {
+            if negotiateCompression {
                 headers.add(name: "Sec-WebSocket-Extensions", value: "permessage-deflate")
             }
             request.headers = headers

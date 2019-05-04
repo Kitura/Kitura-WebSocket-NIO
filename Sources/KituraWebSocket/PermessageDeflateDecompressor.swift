@@ -50,8 +50,8 @@ class PermessageDeflateDecompressor : ChannelInboundHandler {
     // with the entire frame data decompressed.
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var frame = unwrapInboundIn(data)
-        // If this is a control frame, there's nothing to do.
-        guard frame.opcode == .text || frame.opcode == .binary || frame.opcode == .continuation else {
+        // If this is a control frame, or if rsv1 isn't set (no compression), there's nothing to do.
+        guard frame.isDataFrame && frame.isCompressed else {
             context.fireChannelRead(self.wrapInboundOut(frame))
             return
         }
@@ -157,5 +157,16 @@ extension z_stream {
             return typedOutputPtr.count - Int(self.avail_out)
         }
         return rc
+    }
+}
+
+extension WebSocketFrame {
+    var isDataFrame: Bool {
+        let opcode = self.opcode
+        return opcode == .text || opcode == .binary || opcode == .continuation
+    }
+
+    var isCompressed: Bool {
+        return self.rsv1 == true
     }
 }

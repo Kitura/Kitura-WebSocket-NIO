@@ -57,7 +57,11 @@ class ComplexTests: KituraTest {
             }, { expectation in
                 self.performTest(framesToSend: [(false, self.opcodeBinary, shortBinaryPayload), (true, self.opcodeContinuation, mediumBinaryPayload)],
                                  expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                                 expectation: expectation, compressed: true)
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            },  { expectation in
+                self.performTest(framesToSend: [(false, self.opcodeBinary, shortBinaryPayload), (true, self.opcodeContinuation, mediumBinaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
         })
     }
 
@@ -78,7 +82,11 @@ class ComplexTests: KituraTest {
             }, { expectation in
                 self.performTest(framesToSend: [(false, self.opcodeBinary, binaryPayload), (true, self.opcodeContinuation, binaryPayload)],
                                  expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                                 expectation: expectation, compressed: true)
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(false, self.opcodeBinary, binaryPayload), (true, self.opcodeContinuation, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
         })
     }
 
@@ -142,10 +150,14 @@ class ComplexTests: KituraTest {
             self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
                              expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
                              expectation: expectation)
-        }, { expectation in
-            self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
-                             expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                             expectation: expectation, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
         })
     }
 
@@ -164,7 +176,11 @@ class ComplexTests: KituraTest {
             }, { expectation in
                 self.performTest(framesToSend: [(false, self.opcodeText, textPayload), (true, self.opcodeContinuation, textPayload)],
                                  expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                                 expectation: expectation, compressed: true)
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(false, self.opcodeText, textPayload), (true, self.opcodeContinuation, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
         })
     }
 }

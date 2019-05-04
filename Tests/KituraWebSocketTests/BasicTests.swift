@@ -58,11 +58,15 @@ class BasicTests: KituraTest {
             self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
                              expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
                              expectation: expectation)
-        }, { expectation in
-            self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
-                             expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
-                             expectation: expectation, compressed: true)
-        })
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            })
     }
 
     func testBinaryMediumMessage() {
@@ -76,16 +80,18 @@ class BasicTests: KituraTest {
         } while binaryPayload.length < 1000
 
         performServerTest (asyncTasks: { expectation in
-
             self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
                              expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
                              expectation: expectation)
-        }, { expectation in
-
-            self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
-                             expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
-                             expectation: expectation, compressed: true)
-        })
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            })
     }
 
     func testBinaryShortMessage() {
@@ -95,16 +101,18 @@ class BasicTests: KituraTest {
         let binaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
 
         performServerTest (asyncTasks: { expectation in
-
             self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
                              expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
                              expectation: expectation)
-        }, { expectation in
-
-            self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
-                             expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
-                             expectation: expectation, compressed: true)
-        })
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectedFrames: [(true, self.opcodeBinary, binaryPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            })
     }
 
     func testGracefullClose() {
@@ -122,9 +130,7 @@ class BasicTests: KituraTest {
         register(closeReason: .noReasonCodeSent)
 
         performServerTest { expectation in
-
             let pingPayload = NSData()
-
             self.performTest(framesToSend: [(true, self.opcodePing, pingPayload)],
                              expectedFrames: [(true, self.opcodePong, pingPayload)],
                              expectation: expectation)
@@ -135,9 +141,7 @@ class BasicTests: KituraTest {
         register(closeReason: .noReasonCodeSent)
 
         performServerTest { expectation in
-
             let pingPayload = self.payload(text: "Testing, testing 1,2,3")
-
             self.performTest(framesToSend: [(true, self.opcodePing, pingPayload)],
                              expectedFrames: [(true, self.opcodePong, pingPayload)],
                              expectation: expectation)
@@ -201,16 +205,18 @@ class BasicTests: KituraTest {
         let textPayload = self.payload(text: text)
 
         performServerTest (asyncTasks: { expectation in
-
             self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
                              expectedFrames: [(true, self.opcodeText, textPayload)],
                              expectation: expectation)
-        }, { expectation in
-
-            self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
-                             expectedFrames: [(true, self.opcodeText, textPayload)],
-                             expectation: expectation, compressed: true)
-        })
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            })
     }
 
     func testTextMediumMessage() {
@@ -223,16 +229,18 @@ class BasicTests: KituraTest {
         let textPayload = self.payload(text: text)
 
         performServerTest(asyncTasks: { expectation in
-
             self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
                              expectedFrames: [(true, self.opcodeText, textPayload)],
                              expectation: expectation)
-        }, { expectation in
-
-            self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
-                             expectedFrames: [(true, self.opcodeText, textPayload)],
-                             expectation: expectation, compressed: true)
-        })
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            })
     }
 
     func testTextShortMessage() {
@@ -241,16 +249,18 @@ class BasicTests: KituraTest {
         let textPayload = self.payload(text: "Testing, testing 1,2,3")
 
         performServerTest(asyncTasks: { expectation in
-
             self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
                              expectedFrames: [(true, self.opcodeText, textPayload)],
                              expectation: expectation)
-        }, { expectation in
-
-            self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
-                             expectedFrames: [(true, self.opcodeText, textPayload)],
-                             expectation: expectation, compressed: true)
-        })
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: true)
+            }, { expectation in
+                self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
+                                 expectedFrames: [(true, self.opcodeText, textPayload)],
+                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            })
     }
 
     func testUserDefinedCloseCode() {
@@ -288,13 +298,10 @@ class BasicTests: KituraTest {
         register(closeReason: .noReasonCodeSent)
 
         performServerTest { expectation in
-
             let textPayload = self.payload(text: "\u{00}")
-
             self.performTest(framesToSend: [(true, self.opcodeText, textPayload)],
                              expectedFrames: [(true, self.opcodeText, textPayload)],
                              expectation: expectation)
         }
     }
-
 }

@@ -16,7 +16,7 @@ matrix:
       dist: xenial
       sudo: required
       services: docker
-      env: DOCKER_IMAGE=swift:5.0.1-xenial DOCKER_PRIVILEGED=true DOCKER_PACKAGES="libz-dev" CUSTOM_TEST_SCRIPT=.autobahn.sh
+      env: DOCKER_IMAGE=swift:5.0.1-xenial DOCKER_PRIVILEGED=true DOCKER_PACKAGES="libz-dev" #CUSTOM_TEST_SCRIPT=.autobahn.sh
     - os: linux
       dist: xenial
       sudo: required
