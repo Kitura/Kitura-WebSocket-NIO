@@ -63,25 +63,29 @@ public class WebSocketConnection {
             Log.error("ChannelHandlerContext unavailable")
             return
         }
-        if let message = withMessage {
-            var buffer = ctx.channel.allocator.buffer(capacity: message.count)
-            buffer.write(string: message)
-            sendMessage(with: .ping, data: buffer)
-        } else {
-            let emptyBuffer = ctx.channel.allocator.buffer(capacity: 1)
-            sendMessage(with: .ping, data: emptyBuffer)
+        ctx.eventLoop.execute {
+            if let message = withMessage {
+                var buffer = ctx.channel.allocator.buffer(capacity: message.count)
+                buffer.write(string: message)
+                self.sendMessage(with: .ping, data: buffer)
+            } else {
+                let emptyBuffer = ctx.channel.allocator.buffer(capacity: 1)
+                self.sendMessage(with: .ping, data: emptyBuffer)
+            }
         }
     }
 
     public func send(message: Data, asBinary: Bool = true) {
-       guard active else { return }
-       guard let ctx = ctx else {
-           Log.error("ChannelHandlerContext unavailable")
-           return
-       }
-       var buffer = ctx.channel.allocator.buffer(capacity: message.count)
-       buffer.write(bytes: message)
-       sendMessage(with: asBinary ? .binary : .text, data: buffer)
+        guard active else { return }
+        guard let ctx = ctx else {
+            Log.error("ChannelHandlerContext unavailable")
+            return
+        }
+        ctx.eventLoop.execute {
+            var buffer = ctx.channel.allocator.buffer(capacity: message.count)
+            buffer.write(bytes: message)
+            self.sendMessage(with: asBinary ? .binary : .text, data: buffer)
+        }
     }
 
     public func send(message: String) {
