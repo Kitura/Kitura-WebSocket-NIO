@@ -25,11 +25,14 @@ class TestWebSocketService: WebSocketService {
     let closeReason: WebSocketCloseReasonCode
     let pingMessage: String?
     let testServerRequest: Bool
+    let testQueryParams: Bool
+    var queryParams: [String: String] = [:]
 
-    public init(closeReason: WebSocketCloseReasonCode, testServerRequest: Bool, pingMessage: String?) {
+    public init(closeReason: WebSocketCloseReasonCode, testServerRequest: Bool, pingMessage: String?, testQueryParams: Bool = false) {
         self.closeReason = closeReason
         self.testServerRequest = testServerRequest
         self.pingMessage = pingMessage
+        self.testQueryParams = testQueryParams
     }
 
     public func connected(connection: WebSocketConnection) {
@@ -49,6 +52,11 @@ class TestWebSocketService: WebSocketService {
             sleep(2)
 
             performServerRequestTests(request: connection.request)
+        }
+
+        if testQueryParams {
+            let parsedURL = URLParser(url: connection.request.url, isConnect: false)
+            self.queryParams = parsedURL.queryParameters.mapValues({ $0.removingPercentEncoding ?? $0 })
         }
     }
 
@@ -86,7 +94,13 @@ class TestWebSocketService: WebSocketService {
     }
 
     public func received(message: String, from: WebSocketConnection) {
-        from.send(message: message)
+        if self.testQueryParams {
+            let keys = queryParams.keys.sorted().joined(separator: ",")
+            let values = queryParams.values.sorted().joined(separator: ",")
+            from.send(message: "\(message)\(keys) and \(values)")
+        } else {
+            from.send(message: message)
+        }
 
         if message == "close" {
             from.close(reason: .goingAway, description: "Going away...")

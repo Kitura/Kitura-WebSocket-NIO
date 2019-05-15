@@ -38,6 +38,7 @@ class BasicTests: KituraTest {
             ("testTextLongMessage", testTextLongMessage),
             ("testTextMediumMessage", testTextMediumMessage),
             ("testTextShortMessage", testTextShortMessage),
+            ("testTextShortMessageWithQueryParams", testTextShortMessageWithQueryParams),
             ("testNullCharacter", testNullCharacter),
             ("testUserDefinedCloseCode", testUserDefinedCloseCode),
             ("testUserCloseMessage", testUserCloseMessage)
@@ -261,6 +262,17 @@ class BasicTests: KituraTest {
                                  expectedFrames: [(true, self.opcodeText, textPayload)],
                                  expectation: expectation, negotiateCompression: true, compressed: false)
             })
+    }
+
+    func testTextShortMessageWithQueryParams() {
+        register(closeReason: .noReasonCodeSent, testQueryParams: true)
+        let textPayload = self.payload(text: "Keys and Values: ")
+        let expectedPayload = self.payload(text: "Keys and Values: p1,p2 and v1,v2")
+        performServerTest(asyncTasks: { expectation in
+            self.performTest(onPath: "/wstester?p1=v1&p2=v2", framesToSend: [(true, self.opcodeText, textPayload)],
+                             expectedFrames: [(true, self.opcodeText, expectedPayload)],
+                             expectation: expectation)
+        })
     }
 
     func testUserDefinedCloseCode() {
