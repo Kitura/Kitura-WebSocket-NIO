@@ -18,7 +18,7 @@ import XCTest
 
 import LoggerAPI
 @testable import KituraWebSocket
-@testable import KituraNet
+import KituraNet
 import Cryptor
 import NIO
 import NIOHTTP1
@@ -120,7 +120,7 @@ class KituraTest: XCTestCase {
 
         do {
             let channel = try clientBootstrap.connect(host: "localhost", port: 8080).wait()
-            var request = HTTPRequestHead(version: HTTPVersion(major: 1, minor: 1), method: HTTPMethod.method(from: "GET"), uri: toPath)
+            var request = HTTPRequestHead(version: HTTPVersion(major: 1, minor: 1), method: HTTPMethod(rawValue: "GET"), uri: toPath)
             var headers = HTTPHeaders()
             headers.add(name: "Host", value: "localhost:8080")
             headers.add(name: "Upgrade", value: "websocket")
