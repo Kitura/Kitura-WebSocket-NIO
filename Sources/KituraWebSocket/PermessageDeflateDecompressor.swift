@@ -49,7 +49,7 @@ class PermessageDeflateDecompressor : ChannelInboundHandler {
     // Here, we intercept incoming compressed frames, decompress the payload across multiple continuation frame and write a fire a channel read event
     // with the entire frame data decompressed.
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var frame = unwrapInboundIn(data)
+        let frame = unwrapInboundIn(data)
         // If this is a control frame, or if rsv1 isn't set (no compression), there's nothing to do.
         guard frame.isDataFrame && frame.isCompressed else {
             context.fireChannelRead(self.wrapInboundOut(frame))
