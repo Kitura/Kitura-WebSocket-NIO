@@ -45,13 +45,17 @@ class PermessageDeflateDecompressor : ChannelInboundHandler {
     // The default LZ77 window size; 15
     var maxWindowBits = MAX_WBITS
 
+    // A message may span multiple frames. Only the first frame (text/binary) may indicate compression.
+    // This flag is used to tell the decompressor if a continuation frame belongs to a compressed message.
+    private var receivingCompressedMessage = false
+
     // PermessageDeflateDecompressor is a `ChannelInboundHandler`, this function gets called when the previous inbound handler fires a channel read event.
     // Here, we intercept incoming compressed frames, decompress the payload across multiple continuation frame and write a fire a channel read event
     // with the entire frame data decompressed.
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let frame = unwrapInboundIn(data)
-        // If this is a control frame, or if rsv1 isn't set (no compression), there's nothing to do.
-        guard frame.isDataFrame && frame.isCompressed else {
+        // We should either have a data frame with rsv1 set, or a continuation frame of a compressed message. There's nothing to do otherwise.
+        guard frame.isCompressedDataFrame || (frame.isContinuationFrame && self.receivingCompressedMessage) else {
             context.fireChannelRead(self.wrapInboundOut(frame))
             return
         }
@@ -63,10 +67,14 @@ class PermessageDeflateDecompressor : ChannelInboundHandler {
         } else {
             self.messageType = frame.opcode
             self.payload = receivedPayload
+            self.receivingCompressedMessage = true
         }
 
         // If the current frame isn't a final frame of a message or if `payload` still empty, there's nothing to do.
         guard frame.fin, var inputBuffer = self.payload else { return }
+
+        // We've received all frames pertaining to the message. Reset the compressedMessage flag.
+        self.receivingCompressedMessage = false
 
         // Append the trailer 0, 0, ff, ff before decompressing
         inputBuffer.writeBytes([0x00, 0x00, 0xff, 0xff])
@@ -162,11 +170,14 @@ extension z_stream {
 
 extension WebSocketFrame {
     var isDataFrame: Bool {
-        let opcode = self.opcode
-        return opcode == .text || opcode == .binary || opcode == .continuation
+        return self.opcode == .text || self.opcode == .binary
     }
 
-    var isCompressed: Bool {
-        return self.rsv1 == true
+    var isCompressedDataFrame: Bool {
+        return self.isDataFrame && self.rsv1 == true
+    }
+
+    var isContinuationFrame: Bool {
+        return self.opcode == .continuation
     }
 }
