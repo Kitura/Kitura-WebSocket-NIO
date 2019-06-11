@@ -9,9 +9,7 @@
 branches:
   only:
     - master
-    - develop
-    - /^issue.*$/
-    - websocket-nio
+    - websocket-nio-1.0
 
 matrix:
   include:
