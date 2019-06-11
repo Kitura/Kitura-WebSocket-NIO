@@ -49,8 +49,8 @@ class PermessageDeflateCompressor : ChannelOutboundHandler {
         var frame = unwrapOutboundIn(data)
 
         // If this is a control frame, do not attempt compression.
-        guard frame.isDataFrame else {
-             ctx.writeAndFlush(self.wrapOutboundOut(frame)).whenComplete { 
+        guard frame.isDataFrame || frame.isContinuationFrame else {
+             ctx.writeAndFlush(self.wrapOutboundOut(frame)).whenComplete {
                  promise?.succeed(result: ())
              }
              return
