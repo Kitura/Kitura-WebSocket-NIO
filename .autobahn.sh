@@ -13,10 +13,11 @@ run_autobahn()
     TESTS=$1
     NTESTS=$2
 
+    # Refer to https://github.com/apple/swift-package-manager/blob/swift-4.2-branch/Sources/Build/Triple.swift#L109
     if [ `uname` == "Linux" ]; then
         PLATFORM_SUBDIR="x86_64-unknown-linux"
     else
-        PLATFORM_SUBDIR="x86_64-apple-macosx"
+        PLATFORM_SUBDIR="x86_64-apple-macosx10.10"
     fi
 
     # Launch the TestWebSocketService, save its pid
