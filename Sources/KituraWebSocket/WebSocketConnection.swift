@@ -41,7 +41,7 @@ public class WebSocketConnection {
 
     var message: ByteBuffer?
 
-    var context: ChannelHandlerContext?
+    weak var context: ChannelHandlerContext?
 
     private var errors: [String] = []
 
