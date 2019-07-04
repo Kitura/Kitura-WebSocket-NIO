@@ -44,6 +44,9 @@ class PermessageDeflateCompressor : ChannelOutboundHandler {
     // The zlib stream
     private var stream: z_stream = z_stream()
 
+    // Initialize the z_stream only once if context takeover is enabled
+    private var streamInitialized = false
+
     // PermessageDeflateCompressor is an outbound handler, this function gets called when a frame is written to the channel by WebSocketConnection.
     func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         var frame = unwrapOutboundIn(data)
@@ -77,19 +80,38 @@ class PermessageDeflateCompressor : ChannelOutboundHandler {
         _ = context.writeAndFlush(self.wrapOutboundOut(deflatedFrame))
     }
 
+    func close(context: ChannelHandlerContext, mode: CloseMode, promise: EventLoopPromise<Void>?) {
+        // PermessageDeflateCompressor is an outbound handler. If the underlying
+        // WebSocketConnection decides to close the connection, the close message
+        // needs to be intercepted and the deflater closed while we're using context takeover.
+        if noContextTakeOver == false {
+            deflateEnd(&stream)
+        }
+        context.close(mode: mode, promise: promise)
+    }
+
     func deflatePayload(in buffer: ByteBuffer, allocator: ByteBufferAllocator, dropFourTrailingOctets: Bool = false) -> ByteBuffer {
         // Initialize the deflater as per https://www.zlib.net/zlib_how.html
-        stream.zalloc = nil 
-        stream.zfree = nil 
-        stream.opaque = nil 
-
-        let rc = deflateInit2_(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, self.maxWindowBits, 8,
-                     Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
-        precondition(rc == Z_OK, "Unexpected return from zlib init: \(rc)")
+        if noContextTakeOver || streamInitialized == false {
+            stream.zalloc = nil
+            stream.zfree = nil
+            stream.opaque = nil
+            stream.next_in = nil
+            stream.avail_in = 0
+            // The zlib manual asks us to provide a negative windowBits value for raw deflate
+            let rc = deflateInit2_(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -self.maxWindowBits, 8,
+                                   Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
+            precondition(rc == Z_OK, "Unexpected return from zlib init: \(rc)")
+            self.streamInitialized = true
+        }
 
         defer {
-            // Deinitialize the deflater before returning
-            deflateEnd(&stream)
+            if noContextTakeOver {
+                // We aren't doing a context takeover.
+                // This means the deflater is to be used on a per-message basis.
+                // So, we deinitialize the deflater before returning.
+                deflateEnd(&stream)
+            }
         }
 
         // Deflate/compress the payload
@@ -113,10 +135,6 @@ class PermessageDeflateCompressor : ChannelOutboundHandler {
         // Make sure all of inputBuffer was read, and outputBuffer isn't empty
         precondition(inputBuffer.readableBytes == 0)
         precondition(outputBuffer.readableBytes > 0)
-
-        // Remove the 0x78 0x9C zlib header added by zlib
-        _ = outputBuffer.readBytes(length: 2)
-        outputBuffer.discardReadBytes()
 
         // Ignore the 0, 0, 0xff, 0xff trailer added by zlib
         if dropFourTrailingOctets {
