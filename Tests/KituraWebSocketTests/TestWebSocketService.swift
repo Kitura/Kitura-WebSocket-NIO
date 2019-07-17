@@ -28,12 +28,15 @@ class TestWebSocketService: WebSocketService {
     let testQueryParams: Bool
     var queryParams: [String: String] = [:]
 
-    public init(closeReason: WebSocketCloseReasonCode, testServerRequest: Bool, pingMessage: String?, testQueryParams: Bool = false) {
+    public init(closeReason: WebSocketCloseReasonCode, testServerRequest: Bool, pingMessage: String?, testQueryParams: Bool = false, connectionTimeout: Int? = nil) {
         self.closeReason = closeReason
         self.testServerRequest = testServerRequest
         self.pingMessage = pingMessage
         self.testQueryParams = testQueryParams
+        self.connectionTimeout = connectionTimeout
     }
+
+    public let connectionTimeout: Int?
 
     public func connected(connection: WebSocketConnection) {
         connectionId = connection.id

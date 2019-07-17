@@ -43,8 +43,15 @@ public class WebSocketConnection {
 
     private var errors: [String] = []
 
-    init(request: ServerRequest) {
+    // A connection timeout configured by the WebSocketService
+    private let connectionTimeout: Int?
+
+    // Are we waiting for a pong in response to a heartbeat ping?
+    private var waitingForPong: Bool = false
+
+    init(request: ServerRequest, service: WebSocketService? = nil) {
         self.request = request
+        self.connectionTimeout = service?.connectionTimeout
     }
 
     public func close(reason: WebSocketCloseReasonCode? = nil, description: String? = nil) {
@@ -101,6 +108,10 @@ extension WebSocketConnection: ChannelInboundHandler {
     public func handlerAdded(context: ChannelHandlerContext) {
         self.context = context
         guard context.channel.isActive else { return }
+        if let timeout = self.connectionTimeout {
+            let idleStateHandler = IdleStateHandler(allTimeout: TimeAmount.seconds(Int64(timeout/2)))
+            context.pipeline.addHandler(idleStateHandler, position: .before(self)).whenComplete { _ in }
+        }
         self.fireConnected()
     }
 
@@ -224,7 +235,11 @@ extension WebSocketConnection: ChannelInboundHandler {
             }
             sendMessage(with: .pong, data: data)
 
-        case .pong: break
+        case .pong:
+            // If we were expecting this pong, following a heartbeat ping, don't expect it anymore.
+            if self.waitingForPong {
+                self.waitingForPong = false
+            }
 
         case let code where code.isControlOpcode:
             let intCode = Int(webSocketOpcode: code)
@@ -233,6 +248,16 @@ extension WebSocketConnection: ChannelInboundHandler {
         case let code:
             let intCode = Int(webSocketOpcode: code)
             closeConnection(reason: .protocolError, description: "Parsed a frame with an invalid operation code of \(intCode)", hard: true)
+        }
+    }
+
+    public func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        guard event is IdleStateHandler.IdleStateEvent else { return }
+        if self.waitingForPong {
+            _ = context.channel.close(mode: .all)
+        } else {
+            self.sendMessage(with: .ping, data: context.channel.allocator.buffer(capacity: 2))
+            self.waitingForPong = true
         }
     }
 

@@ -36,7 +36,7 @@ public class WSConnectionUpgradeFactory: ProtocolHandlerFactory {
         let wsRequest = WSServerRequest(request: request)
         let service = registry[wsRequest.urlURL.path]
 
-        let connection = WebSocketConnection(request: wsRequest)
+        let connection = WebSocketConnection(request: wsRequest, service: service)
         connection.service = service
 
         return connection

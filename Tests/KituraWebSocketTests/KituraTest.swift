@@ -105,7 +105,7 @@ class KituraTest: XCTestCase {
 
     func performTest(onPath: String? = nil, framesToSend: [(Bool, Int, NSData)], masked: [Bool] = [],
                      expectedFrames: [(Bool, Int, NSData)], expectation: XCTestExpectation,
-                     negotiateCompression: Bool = false, compressed: Bool = false, contextTakeover: ContextTakeover? = nil) {
+                     negotiateCompression: Bool = false, compressed: Bool = false, contextTakeover: ContextTakeover? = nil, sleepTime: Int = 0) {
         precondition(masked.count == 0 || framesToSend.count == masked.count)
         let upgraded = DispatchSemaphore(value: 0)
         self.compressor = PermessageDeflateCompressor(noContextTakeOver: contextTakeover?.clientNoContextTakeover ?? false)
@@ -127,8 +127,8 @@ class KituraTest: XCTestCase {
         }
     }
 
-    func register(onPath: String? = nil, closeReason: WebSocketCloseReasonCode, testServerRequest: Bool = false, pingMessage: String? = nil, testQueryParams: Bool = false) {
-        let service = TestWebSocketService(closeReason: closeReason, testServerRequest: testServerRequest, pingMessage: pingMessage, testQueryParams: testQueryParams)
+    func register(onPath: String? = nil, closeReason: WebSocketCloseReasonCode, testServerRequest: Bool = false, pingMessage: String? = nil, testQueryParams: Bool = false, connectionTimeout: Int? = nil) {
+        let service = TestWebSocketService(closeReason: closeReason, testServerRequest: testServerRequest, pingMessage: pingMessage, testQueryParams: testQueryParams, connectionTimeout: connectionTimeout)
         WebSocket.register(service: service, onPath: onPath ?? servicePath)
     }
 
