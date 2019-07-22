@@ -262,13 +262,18 @@ extension WebSocketConnection: ChannelInboundHandler {
     }
 
     public func errorCaught(context: ChannelHandlerContext, error: Error) {
-        guard let error = error as? NIOWebSocketError else { return }
-        switch error {
+        guard let _error = error as? NIOWebSocketError else {
+            Log.error("A non-NIOWebSocketError error was encountered: \(error). The channel will be closed.")
+            closeConnection(reason: .unexpectedServerError, description: "\(error)", hard: true)
+            return
+        }
+        switch _error {
         case .multiByteControlFrameLength:
             connectionClosed(reason: .protocolError, description: "Control frames are only allowed to have payload up to and including 125 octets")
         case .fragmentedControlFrame:
             connectionClosed(reason: .protocolError, description: "Control frames must not be fragmented")
-        default: break
+        case .invalidFrameLength:
+            connectionClosed(reason: .protocolError, description: "Frames must be smaller than the configured maximum acceptable frame size")
         }
     }
 
