@@ -37,8 +37,6 @@ public class WebSocketConnection {
 
     var awaitClose = false
 
-    var active = true
-
     var message: ByteBuffer?
 
     weak var context: ChannelHandlerContext?
@@ -58,9 +56,7 @@ public class WebSocketConnection {
     }
 
     public func ping(withMessage: String? = nil) {
-        guard active else { return }
         guard let context = context else {
-            Log.error("ChannelHandlerContext unavailable")
             return
         }
         context.eventLoop.execute {
@@ -76,9 +72,7 @@ public class WebSocketConnection {
     }
 
     public func send(message: Data, asBinary: Bool = true) {
-        guard active else { return }
         guard let context = context else {
-            Log.error("ChannelHandlerContext unavailable")
             return
         }
         context.eventLoop.execute {
@@ -89,9 +83,7 @@ public class WebSocketConnection {
     }
 
     public func send(message: String) {
-        guard active else { return }
         guard let context = context else {
-            Log.error("ChannelHandlerContext unavailable")
             return
         }
         context.eventLoop.execute {
@@ -201,7 +193,7 @@ extension WebSocketConnection: ChannelInboundHandler {
             }
 
         case .connectionClose:
-            if active {
+            if context != nil {
                 let reasonCode: WebSocketErrorCode
                 var description: String?
                 if frame.length >= 2 && frame.length < 126 {
@@ -291,7 +283,6 @@ extension WebSocketConnection {
 
     func connectionClosed(reason: WebSocketErrorCode, description: String? = nil, reasonToSendBack: WebSocketErrorCode? = nil) {
         guard let context = context else {
-             Log.error("ChannelHandlerContext unavailable")
              return
         }
         if context.channel.isWritable {
@@ -304,7 +295,6 @@ extension WebSocketConnection {
 
     func sendMessage(with opcode: WebSocketOpcode, data: ByteBuffer) {
         guard let context = context else {
-            Log.error("ChannelHandlerContext unavailable")
             return
         }
         guard context.channel.isWritable else {
@@ -323,7 +313,6 @@ extension WebSocketConnection {
 
     func closeConnection(reason: WebSocketErrorCode?, description: String?, hard: Bool) {
          guard let context = context else {
-             Log.error("ChannelHandlerContext unavailable")
              return
          }
          var data = context.channel.allocator.buffer(capacity: 2)
