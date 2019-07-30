@@ -252,7 +252,11 @@ extension WebSocketConnection: ChannelInboundHandler {
     }
 
     public func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
-        guard event is IdleStateHandler.IdleStateEvent else { return }
+        guard event is IdleStateHandler.IdleStateEvent else {
+            context.fireUserInboundEventTriggered(event)
+            return
+        }
+
         if self.waitingForPong {
             _ = context.channel.close(mode: .all)
         } else {
