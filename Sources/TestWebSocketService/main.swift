@@ -33,6 +33,8 @@ class EchoService: WebSocketService {
     public func received(message: String, from: WebSocketConnection) {
         from.send(message: message)
     }
+
+    public let connectionTimeout: Int? = 20
 }
 
 WebSocket.register(service: EchoService(), onPath: "/")
