@@ -65,6 +65,7 @@ install_autobahn() {
             && pip install --upgrade pip \
             && pip install autobahntestsuite
     else
+        pip install --upgrade pip
         pip install autobahntestsuite
     fi
 }
