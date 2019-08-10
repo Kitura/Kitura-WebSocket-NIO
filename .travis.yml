@@ -16,12 +16,12 @@ matrix:
       dist: xenial
       sudo: required
       services: docker
-      env: DOCKER_IMAGE=swift:5.0.1-xenial DOCKER_PRIVILEGED=true DOCKER_PACKAGES="libz-dev" 
+      env: DOCKER_IMAGE=swift:5.0.2-xenial DOCKER_PRIVILEGED=true DOCKER_PACKAGES="libz-dev" 
     - os: linux
       dist: xenial
       sudo: required
       services: docker
-      env: DOCKER_IMAGE=swift:5.0.1 SWIFT_SNAPSHOT=$SWIFT_DEVELOPMENT_SNAPSHOT DOCKER_PRIVILEGED=true DOCKER_PACKAGES="libz-dev"
+      env: DOCKER_IMAGE=swift:5.0.2 SWIFT_SNAPSHOT=$SWIFT_DEVELOPMENT_SNAPSHOT DOCKER_PRIVILEGED=true DOCKER_PACKAGES="libz-dev"
     - os: osx
       osx_image: xcode10.2
       sudo: required
