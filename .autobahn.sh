@@ -65,9 +65,8 @@ install_autobahn() {
             && pip install --upgrade pip \
             && pip install autobahntestsuite
     else
-        brew install python3
-        pip3 install --upgrade pip
-        pip3 install autobahntestsuite
+        pip install --upgrade pip
+        pip install autobahntestsuite
     fi
 }
 
