@@ -40,14 +40,14 @@ public class WebSocketConnection {
     var message: ByteBuffer?
 
     weak var context: ChannelHandlerContext?
-
-    private var errors: [String] = []
-
+    
     // A connection timeout configured by the WebSocketService
     private let connectionTimeout: Int?
 
     // Are we waiting for a pong in response to a heartbeat ping?
     private var waitingForPong: Bool = false
+    
+    private var errors : [String] = []
 
     init(request: ServerRequest, service: WebSocketService? = nil) {
         self.request = request
@@ -116,16 +116,16 @@ extension WebSocketConnection: ChannelInboundHandler {
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+
+        // Are no extensions negotiated with WebSocket upgrade request
+        let hasNoExtensions = self.hasNoExtensionsConfigured(request: self.request)
+
         let frame = self.unwrapInboundIn(data)
 
         do {
-            try validateRSV(frame: frame)
-            guard frame.extensionData == nil else {
-                connectionClosed(reason: .protocolError, description: "Extension data must be nil when no extension is negotiated")
-                return
-            }
+            try validateRSV(frame: frame, hasNoExtensions: hasNoExtensions)
         } catch {
-            connectionClosed(reason: .protocolError, description: "\(errors.joined(separator: ",")) must be 0 unless an extension is negotiated that defines meanings for non-zero values")
+            connectionClosed(reason: .protocolError, description: "\(errors.joined(separator: ",")) must be 0 unless negotiated to define meaning for non-zero values")
         }
 
         var data = unmaskedData(frame: frame)
@@ -293,14 +293,14 @@ extension WebSocketConnection: ChannelInboundHandler {
         case invalidRSV
     }
 
-    private func validateRSV(frame: WebSocketFrame) throws {
+    private func validateRSV(frame: WebSocketFrame, hasNoExtensions: Bool) throws {
 
-        if frame.rsv1 {
-           errors.append("RSV1")
+        if hasNoExtensions && frame.rsv1 {
+            errors.append("RSV1")
         }
 
         if frame.rsv2 {
-           errors.append("RSV2")
+            errors.append("RSV2")
         }
 
         if frame.rsv3 {
@@ -310,6 +310,14 @@ extension WebSocketConnection: ChannelInboundHandler {
         guard errors.isEmpty else {
             throw RSVError.invalidRSV
         }
+    }
+
+    // HTTP upgrade request header has no extensions configured
+    private func hasNoExtensionsConfigured(request: ServerRequest) -> Bool {
+        if let hasNoExtensions = request.headers["sec-websocket-extensions"]?.first?.split(separator: ";").first {
+            return hasNoExtensions != "permessage-deflate"
+        }
+        return true
     }
 }
 
@@ -367,7 +375,7 @@ extension WebSocketConnection {
     }
 }
 
-//Callbacks to the WebSocketService
+//  Callbacks to the WebSocketService
 extension WebSocketConnection {
     func fireConnected() {
         service?.connected(connection: self)
