@@ -21,12 +21,13 @@ import Foundation
 import KituraNet
 
 class TestWebSocketService: WebSocketService {
-    var connectionId = ""
+    private var _connectionId = ""
     let closeReason: WebSocketCloseReasonCode
     let pingMessage: String?
     let testServerRequest: Bool
     let testQueryParams: Bool
     var queryParams: [String: String] = [:]
+    let connectionIDAccessQueue: DispatchQueue = DispatchQueue(label: "Connection ID Access Queue")
 
     public init(closeReason: WebSocketCloseReasonCode, testServerRequest: Bool, pingMessage: String?, testQueryParams: Bool = false, connectionTimeout: Int? = nil) {
         self.closeReason = closeReason
@@ -37,6 +38,19 @@ class TestWebSocketService: WebSocketService {
     }
 
     public let connectionTimeout: Int?
+
+    var connectionId: String {
+        get {
+            return connectionIDAccessQueue.sync {
+                return _connectionId
+            }
+        }
+        set {
+            connectionIDAccessQueue.sync {
+                _connectionId = newValue
+            }
+        }
+    }
 
     public func connected(connection: WebSocketConnection) {
         connectionId = connection.id
@@ -89,7 +103,7 @@ class TestWebSocketService: WebSocketService {
 
     public func disconnected(connection: WebSocketConnection, reason: WebSocketCloseReasonCode) {
         XCTAssertEqual(connectionId, connection.id, "Client ID from connect wasn't client ID from disconnect")
-        XCTAssertEqual(Int(closeReason.code()), Int(reason.code()), "Expected close reason code of \(closeReason) received \(reason)")
+        XCTAssertEqual(Int(closeReason.code()), Int(reason.code()), "Expected close reason code \(closeReason) is not equal to received reason code\(reason)")
     }
 
     public func received(message: Data, from: WebSocketConnection) {

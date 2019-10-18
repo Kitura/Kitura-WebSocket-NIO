@@ -16,7 +16,7 @@
 
 import XCTest
 import Foundation
-
+import NIOWebSocket
 import LoggerAPI
 @testable import KituraWebSocket
 
@@ -33,107 +33,130 @@ class ComplexTests: KituraTest {
             ("testTwoMessagesWithContextTakeover", testTwoMessagesWithContextTakeover),
             ("testTwoMessagesWithClientContextTakeover", testTwoMessagesWithClientContextTakeover),
             ("testTwoMessagesWithServerContextTakeover", testTwoMessagesWithServerContextTakeover),
-            ("testTwoMessagesWithNoContextTakeover", testTwoMessagesWithNoContextTakeover),
+            ("testTwoMessagesWithNoContextTakeover", testTwoMessagesWithNoContextTakeover)
         ]
     }
 
     func testBinaryShortAndMediumFrames() {
         register(closeReason: .noReasonCodeSent)
 
-
-        var bytes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e]
-
-        let shortBinaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
-
-        let mediumBinaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
+        let bytes: [UInt8] = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e]
+        var mediumBinaryPayload = bytes
         repeat {
-            mediumBinaryPayload.append(mediumBinaryPayload.bytes, length: mediumBinaryPayload.length)
-        } while mediumBinaryPayload.length < 1000
+            mediumBinaryPayload.append(contentsOf: mediumBinaryPayload)
+        } while mediumBinaryPayload.count < 1000
 
-        let expectedBinaryPayload = NSMutableData()
-        expectedBinaryPayload.append(shortBinaryPayload.bytes, length: shortBinaryPayload.length)
-        expectedBinaryPayload.append(mediumBinaryPayload.bytes, length: mediumBinaryPayload.length)
-
+        var expectedFrame = bytes
+        expectedFrame.append(contentsOf: mediumBinaryPayload)
         performServerTest(asyncTasks: { expectation in
-            self.performTest(framesToSend: [(false, self.opcodeBinary, shortBinaryPayload), (true, self.opcodeContinuation, mediumBinaryPayload)],
-                             expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                             expectation: expectation)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeBinary, shortBinaryPayload), (true, self.opcodeContinuation, mediumBinaryPayload)],
-                                 expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: true)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeBinary, shortBinaryPayload), (true, self.opcodeContinuation, mediumBinaryPayload)],
-                                 expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            guard let _client = self.createClient() else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false, compressed: false)
+            _client.sendMessage(raw: mediumBinaryPayload, opcode: .continuation, finalFrame: true, compressed: false)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedFrame, "The payload recieved \(payload) is not equal to expected payload \(expectedFrame).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false, compressed: true)
+            _client.sendMessage(raw: mediumBinaryPayload, opcode: .continuation, finalFrame: true, compressed: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedFrame, "The payload recieved \(payload) is not equal to expected payload \(expectedFrame).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false, compressed: false)
+            _client.sendMessage(raw: mediumBinaryPayload, opcode: .continuation, finalFrame: true, compressed: false)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedFrame, "The payload recieved \(payload) is not equal to expected payload \(expectedFrame).")
+                expectation.fulfill()
+            }
         })
     }
 
     func testBinaryTwoShortFrames() {
         register(closeReason: .noReasonCodeSent)
 
-        var bytes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e]
-
-        let binaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
-
-        let expectedBinaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
-        expectedBinaryPayload.append(&bytes, length: bytes.count)
+        let bytes: [UInt8] = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e]
+        var expectedBinaryPayload = bytes
+        expectedBinaryPayload.append(contentsOf: bytes)
 
         performServerTest(asyncTasks: { expectation in
-            self.performTest(framesToSend: [(false, self.opcodeBinary, binaryPayload), (true, self.opcodeContinuation, binaryPayload)],
-                             expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                             expectation: expectation)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeBinary, binaryPayload), (true, self.opcodeContinuation, binaryPayload)],
-                                 expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: true)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeBinary, binaryPayload), (true, self.opcodeContinuation, binaryPayload)],
-                                 expectedFrames: [(true, self.opcodeBinary, expectedBinaryPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            guard let _client = self.createClient() else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false)
+            _client.sendMessage(raw: bytes, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedBinaryPayload, "The payload recieved \(payload) is not equal to expected payload \(expectedBinaryPayload).")
+                expectation.fulfill()
+            }
+        }, {expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false, compressed: true)
+            _client.sendMessage(raw: bytes, opcode: .continuation, finalFrame: true, compressed: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedBinaryPayload, "The payload recieved \(payload) is not equal to expected payload \(expectedBinaryPayload).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false, compressed: false)
+            _client.sendMessage(raw: bytes, opcode: .continuation, finalFrame: true, compressed: false)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedBinaryPayload, "The payload recieved \(payload) is not equal to expected payload \(expectedBinaryPayload).")
+                expectation.fulfill()
+            }
         })
     }
 
     func testPingBetweenBinaryFrames() {
         register(closeReason: .noReasonCodeSent)
-
         performServerTest { expectation in
-
-            var bytes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e]
-
-            let binaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
-
-            let expectedBinaryPayload = NSMutableData(bytes: &bytes, length: bytes.count)
-            expectedBinaryPayload.append(&bytes, length: bytes.count)
-
-            let pingPayload = self.payload(text: "Testing, testing 1,2,3")
-
-            self.performTest(framesToSend: [(false, self.opcodeBinary, binaryPayload),
-                                            (true, self.opcodePing, pingPayload),
-                                            (true, self.opcodeContinuation, binaryPayload)],
-                             expectedFrames: [(true, self.opcodePong, pingPayload), (true, self.opcodeBinary, expectedBinaryPayload)],
-                             expectation: expectation)
+            let bytes: [UInt8] = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e]
+            var expectedBinaryPayload = bytes
+            expectedBinaryPayload.append(contentsOf: bytes)
+            let pingPayload = "Testing, testing 1,2,3"
+            guard let _client = self.createClient() else { return }
+            _client.sendMessage(raw: bytes, opcode: .binary, finalFrame: false)
+            _client.sendMessage(raw: pingPayload, opcode: .ping, finalFrame: true)
+            _client.sendMessage(raw: bytes, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getBytes(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, expectedBinaryPayload, "The payload recieved \(payload) is not equal to expected payload \(expectedBinaryPayload).")
+                expectation.fulfill()
+            }
+            _client.onPong { opcode, _ in
+                XCTAssertEqual(opcode, WebSocketOpcode.pong, "Recieved opcode \(opcode) is not equal expected opcode \(WebSocketOpcode.pong).")
+            }
         }
     }
 
     func testPingBetweenTextFrames() {
         register(closeReason: .noReasonCodeSent)
-
         performServerTest { expectation in
-
             let text = "Testing, testing 1, 2, 3. "
+            let pingPayload = "Testing, testing 1,2,3"
+            var expectedPayload = text
+            expectedPayload.append(contentsOf: text)
 
-            let textPayload = self.payload(text: text)
-
-            let textExpectedPayload = self.payload(text: text + text)
-
-            let pingPayload = self.payload(text: "Testing, testing 1,2,3")
-
-            self.performTest(framesToSend: [(false, self.opcodeText, textPayload),
-                                            (true, self.opcodePing, pingPayload),
-                                            (true, self.opcodeContinuation, textPayload)],
-                             expectedFrames: [(true, self.opcodePong, pingPayload), (true, self.opcodeText, textExpectedPayload)],
-                             expectation: expectation)
+            guard let _client = self.createClient() else { return }
+            _client.sendMessage(raw: text, opcode: .text, finalFrame: false)
+            _client.sendMessage(raw: pingPayload, opcode: .ping, finalFrame: true)
+            _client.sendMessage(raw: text, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)
+                XCTAssertEqual(payload, expectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(expectedPayload).")
+                expectation.fulfill()
+            }
+            _client.onPong { opcode, _ in
+                XCTAssertEqual(opcode, WebSocketOpcode.pong, "Recieved opcode \(opcode) is not equal expected opcode \(WebSocketOpcode.pong)")
+            }
         }
     }
 
@@ -141,27 +164,39 @@ class ComplexTests: KituraTest {
         register(closeReason: .noReasonCodeSent)
 
         let shortText = "Testing, testing 1, 2, 3. "
-        let shortTextPayload = self.payload(text: shortText)
-
         var mediumText = ""
         repeat {
             mediumText += "Testing, testing 1,2,3. "
         } while mediumText.count < 1000
-        let mediumTextPayload = self.payload(text: mediumText)
-
-        let textExpectedPayload = self.payload(text: shortText + mediumText)
+        var textExpectedPayload = shortText
+        textExpectedPayload.append(contentsOf: mediumText)
         performServerTest(asyncTasks: { expectation in
-            self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
-                             expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                             expectation: expectation)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
-                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: true)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeText, shortTextPayload), (true, self.opcodeContinuation, mediumTextPayload)],
-                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            guard let _client = self.createClient() else { return }
+            _client.sendMessage(raw: shortText, opcode: .text, finalFrame: false)
+            _client.sendMessage(raw: mediumText, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, textExpectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(textExpectedPayload).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: shortText, opcode: .text, finalFrame: false, compressed: true)
+            _client.sendMessage(raw: mediumText, opcode: .continuation, finalFrame: true, compressed: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, textExpectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(textExpectedPayload).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: shortText, opcode: .text, finalFrame: false)
+            _client.sendMessage(raw: mediumText, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, textExpectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(textExpectedPayload).")
+                expectation.fulfill()
+            }
         })
     }
 
@@ -169,22 +204,35 @@ class ComplexTests: KituraTest {
         register(closeReason: .noReasonCodeSent)
 
         let text = "Testing, testing 1, 2, 3. "
-
-        let textPayload = self.payload(text: text)
-
-        let textExpectedPayload = self.payload(text: text + text)
+        var textExpectedPayload = text
+        textExpectedPayload.append(contentsOf: text)
         performServerTest(asyncTasks: { expectation in
-            self.performTest(framesToSend: [(false, self.opcodeText, textPayload), (true, self.opcodeContinuation, textPayload)],
-                             expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                             expectation: expectation)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeText, textPayload), (true, self.opcodeContinuation, textPayload)],
-                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: true)
-            }, { expectation in
-                self.performTest(framesToSend: [(false, self.opcodeText, textPayload), (true, self.opcodeContinuation, textPayload)],
-                                 expectedFrames: [(true, self.opcodeText, textExpectedPayload)],
-                                 expectation: expectation, negotiateCompression: true, compressed: false)
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: text, opcode: .text, finalFrame: false)
+            _client.sendMessage(raw: text, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, textExpectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(textExpectedPayload).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: text, opcode: .text, finalFrame: false, compressed: true)
+            _client.sendMessage(raw: text, opcode: .continuation, finalFrame: true, compressed: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, textExpectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(textExpectedPayload).")
+                expectation.fulfill()
+            }
+        }, { expectation in
+            guard let _client = self.createClient(negotiateCompression: true) else { return }
+            _client.sendMessage(raw: text, opcode: .text, finalFrame: false)
+            _client.sendMessage(raw: text, opcode: .continuation, finalFrame: true)
+            _client.onMessage { receivedData in
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, textExpectedPayload, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(textExpectedPayload).")
+                expectation.fulfill()
+            }
         })
     }
 
@@ -192,13 +240,20 @@ class ComplexTests: KituraTest {
         register(closeReason: .noReasonCodeSent)
 
         let text = "RFC7692 specifies a framework for adding compression functionality to the WebSocket Protocol"
-        let textPayload = self.payload(text: text)
-
-        performServerTest(asyncTasks: { expectation in
-            self.performTest(framesToSend: [(true, self.opcodeText, textPayload), (true, self.opcodeText, textPayload)],
-                             expectedFrames: [(true, self.opcodeText, textPayload), (true, self.opcodeText, textPayload)],
-                             expectation: expectation, negotiateCompression: true, compressed: true, contextTakeover: contextTakeover)
-        })
+        performServerTest { expectation in
+            var count = 0
+            guard let _client = self.createClient(negotiateCompression: true, contextTakeover: contextTakeover) else { return }
+            _client.sendMessage(raw: text, opcode: .text, finalFrame: true)
+            _client.sendMessage(raw: text, opcode: .text, finalFrame: true)
+            _client.onMessage { receivedData in
+                count += 1
+                let payload = receivedData.getString(at: 0, length: receivedData.readableBytes)!
+                XCTAssertEqual(payload, text, "The payload recieved \(String(describing: payload)) is not equal to expected payload \(text).")
+                if count == 2 {
+                    expectation.fulfill()
+                }
+            }
+        }
     }
 
     func testTwoMessagesWithContextTakeover() {

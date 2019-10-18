@@ -19,7 +19,6 @@ import Foundation
 import NIO
 import NIOWebSocket
 
-
 class ConnectionCleanupTests: KituraTest {
 
     static var allTests: [(String, (ConnectionCleanupTests) -> () throws -> Void)] {
@@ -27,19 +26,14 @@ class ConnectionCleanupTests: KituraTest {
             ("testNilConnectionTimeOut", testNilConnectionTimeOut),
             ("testSingleConnectionTimeOut", testSingleConnectionTimeOut),
             ("testPingKeepsConnectionAlive", testPingKeepsConnectionAlive),
-            ("testMultiConnectionTimeOut", testMultiConnectionTimeOut),
+            ("testMultiConnectionTimeOut", testMultiConnectionTimeOut)
         ]
     }
 
     func testNilConnectionTimeOut() {
         register(closeReason: .noReasonCodeSent)
         performServerTest { expectation in
-            let _client = WebSocketClient(host: "localhost", port: 8080,
-                                         uri: "/wstester", requestKey: "test")
-            guard let client = _client else {
-                XCTFail("Couldn't create a WebSocket connection")
-                return
-            }
+            guard let client = self.createClient() else { return }
             sleep(2)
             XCTAssertTrue(client.isConnected)
             expectation.fulfill()
@@ -49,12 +43,7 @@ class ConnectionCleanupTests: KituraTest {
     func testSingleConnectionTimeOut() {
         register(closeReason: .noReasonCodeSent, connectionTimeout: 2)
         performServerTest { expectation in
-            let _client = WebSocketClient(host: "localhost", port: 8080,
-                                         uri: "/wstester", requestKey: "test")
-            guard let client = _client else {
-                XCTFail("Couldn't create a WebSocket connection")
-                return
-            }
+            guard let client = self.createClient() else { return }
             sleep(4)
             XCTAssertFalse(client.isConnected)
             expectation.fulfill()
@@ -64,17 +53,13 @@ class ConnectionCleanupTests: KituraTest {
     func testPingKeepsConnectionAlive() {
         register(closeReason: .noReasonCodeSent, connectionTimeout: 2)
         performServerTest { expectation in
-            let _client = WebSocketClient(host: "localhost", port: 8080,
-                                         uri: "/wstester", requestKey: "test")
-            guard let client = _client else {
-                XCTFail("Couldn't create a WebSocket connection")
-                return
+            guard let client = WebSocketClient(host: "localhost", port: 8080, uri: "/wstester", requestKey: self.secWebKey) else {
+                    XCTFail("Unable to create WebSocketClient")
+                    return
             }
-
-            client.onPing = { data in
-                client.pong(data: data)
-            }
-
+            let delegate = ClientDelegate(client: client)
+            client.delegate = delegate
+            client.connect()
             sleep(4)
             XCTAssertTrue(client.isConnected)
             expectation.fulfill()
@@ -85,32 +70,36 @@ class ConnectionCleanupTests: KituraTest {
         register(closeReason: .noReasonCodeSent, connectionTimeout: 2)
 
         performServerTest { expectation in
-            let _client1 = WebSocketClient(host: "localhost",
-                                          port: 8080,
-                                          uri: "/wstester",
-                                          requestKey: "test")
-            guard let client1 = _client1 else {
-                XCTFail("Couldn't establish a WebSocket connection with the server")
-                return
+            guard let client1 = WebSocketClient(host: "localhost", port: 8080, uri: "/wstester", requestKey: self.secWebKey) else {
+                               XCTFail("Unable to create WebSocketClient")
+                               return
+                       }
+            client1.connect()
+            guard let client2 = WebSocketClient(host: "localhost", port: 8080, uri: "/wstester", requestKey: self.secWebKey) else {
+                    XCTFail("Unable to create WebSocketClient")
+                    return
             }
-
-            let _client2 = WebSocketClient(host: "localhost",
-                                                port: 8080,
-                                                uri: "/wstester",
-                                                requestKey: "test")
-            guard let client2 = _client2 else {
-                XCTFail("Couldn't create a WebSocket connection")
-                return
-            }
-
-            client2.onPing = { data in
-                client2.pong(data: data)
-            }
+            let delegate = ClientDelegate(client: client2)
+            client2.delegate = delegate
+            client2.connect()
 
             sleep(4)
             XCTAssertFalse(client1.isConnected)
             XCTAssertTrue(client2.isConnected)
             expectation.fulfill()
         }
+    }
+}
+
+// Implements WebSocketClient Callback functions referenced by protocol `WebSocketClientDelegate`
+class ClientDelegate: WebSocketClientDelegate {
+    weak var client: WebSocketClient?
+
+    init(client: WebSocketClient){
+        self.client = client
+    }
+
+    func pingRecieved(data: ByteBuffer) {
+        client?.pong(data: data)
     }
 }

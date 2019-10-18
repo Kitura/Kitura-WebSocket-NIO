@@ -15,7 +15,6 @@
  **/
 
 import XCTest
-
 import LoggerAPI
 @testable import KituraWebSocket
 import KituraNet
@@ -25,31 +24,6 @@ import NIOHTTP1
 import NIOWebSocket
 import Foundation
 import Dispatch
-import LoggerAPI
-
-enum ContextTakeover {
-    case none
-    case client
-    case server
-    case both
-
-    func header() -> String {
-        switch self {
-        case .none: return "client_no_context_takeover; server_no_context_takeover"
-        case .client: return "server_no_context_takeover"
-        case .server: return "client_no_context_takeover"
-        case .both: return ""
-        }
-    }
-
-    var clientNoContextTakeover: Bool {
-        return self != .client && self != .both
-    }
-
-    var serverNoContextTakeover: Bool {
-        return self != .server && self != .both
-    }
-}
 
 class KituraTest: XCTestCase {
 
@@ -69,14 +43,6 @@ class KituraTest: XCTestCase {
     // Note: These two paths must only differ by the leading slash
     let servicePathNoSlash = "wstester"
     let servicePath = "/wstester"
-
-    var httpRequestEncoder: HTTPRequestEncoder?
-
-    var httpResponseDecoder: ByteToMessageHandler<HTTPResponseDecoder>?
-
-    var httpHandler: HTTPResponseHandler?
-
-    var compressor: PermessageDeflateCompressor = PermessageDeflateCompressor()
 
     func performServerTest(line: Int = #line, asyncTasks: (XCTestExpectation) -> Void...) {
         let server = HTTP.createServer()
@@ -103,140 +69,21 @@ class KituraTest: XCTestCase {
         }
     }
 
-    func performTest(onPath: String? = nil, framesToSend: [(Bool, Int, NSData)], masked: [Bool] = [],
-                     expectedFrames: [(Bool, Int, NSData)], expectation: XCTestExpectation,
-                     negotiateCompression: Bool = false, compressed: Bool = false, contextTakeover: ContextTakeover? = nil, sleepTime: Int = 0) {
-        precondition(masked.count == 0 || framesToSend.count == masked.count)
-        let upgraded = DispatchSemaphore(value: 0)
-        self.compressor = PermessageDeflateCompressor(noContextTakeOver: contextTakeover?.clientNoContextTakeover ?? false)
-        let decompressor = PermessageDeflateDecompressor(noContextTakeOver: contextTakeover?.serverNoContextTakeover ?? false)
-        guard let channel = sendUpgradeRequest(toPath: onPath ?? servicePath, usingKey: secWebKey, semaphore: upgraded, negotiateCompression: negotiateCompression, contextTakeover: contextTakeover) else { return }
-        upgraded.wait()
-        do {
-            _ = try channel.pipeline.removeHandler(httpRequestEncoder!).wait()
-            _ = try channel.pipeline.removeHandler(httpResponseDecoder!).wait()
-            _ = try channel.pipeline.removeHandler(httpHandler!).wait()
-            try channel.pipeline.addHandler(WebSocketClientHandler(expectedFrames: expectedFrames, expectation: expectation, compressed: negotiateCompression, decompressor: decompressor), position: .first).wait()
-        } catch let error {
-           Log.error("Error: \(error)")
-        }
-        for idx in 0..<framesToSend.count {
-            let masked = masked.count == 0 ? true : masked[idx]
-            let (finalToSend, opCodeToSend, payloadToSend) = framesToSend[idx]
-            self.sendFrame(final: finalToSend, withOpcode: opCodeToSend, withMasking: masked, withPayload: payloadToSend, on: channel, lastFrame: idx == framesToSend.count-1, compressed: compressed, contextTakeover: contextTakeover)
-        }
-    }
-
-    func register(onPath: String? = nil, closeReason: WebSocketCloseReasonCode, testServerRequest: Bool = false, pingMessage: String? = nil, testQueryParams: Bool = false, connectionTimeout: Int? = nil) {
-        let service = TestWebSocketService(closeReason: closeReason, testServerRequest: testServerRequest, pingMessage: pingMessage, testQueryParams: testQueryParams, connectionTimeout: connectionTimeout)
-        WebSocket.register(service: service, onPath: onPath ?? servicePath)
-    }
-
-    func clientChannelInitializer(channel: Channel) -> EventLoopFuture<Void> {
-        self.httpRequestEncoder = HTTPRequestEncoder()
-        self.httpResponseDecoder =  ByteToMessageHandler(HTTPResponseDecoder(leftOverBytesStrategy: .dropBytes))
-        return channel.pipeline.addHandlers(self.httpRequestEncoder!, self.httpResponseDecoder!, position: .last).flatMap {
-            channel.pipeline.addHandler(self.httpHandler!)
-        }
-    }
-
-    func sendUpgradeRequest(forProtocolVersion: String? = "13", toPath: String, usingKey: String?, semaphore: DispatchSemaphore, errorMessage: String? = nil, negotiateCompression: Bool = false, contextTakeover: ContextTakeover? = nil ) -> Channel? {
-        self.httpHandler = HTTPResponseHandler(key: usingKey ?? "", semaphore: semaphore, errorMessage: errorMessage)
-        let clientBootstrap = ClientBootstrap(group: MultiThreadedEventLoopGroup(numberOfThreads: 1))
-            .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEPORT), value: 1)
-            .channelInitializer(clientChannelInitializer)
-
-        do {
-            let channel = try clientBootstrap.connect(host: "localhost", port: 8080).wait()
-            var request = HTTPRequestHead(version: HTTPVersion(major: 1, minor: 1), method: HTTPMethod(rawValue: "GET"), uri: toPath)
-            var headers = HTTPHeaders()
-            headers.add(name: "Host", value: "localhost:8080")
-            headers.add(name: "Upgrade", value: "websocket")
-            headers.add(name: "Connection", value: "Upgrade")
-            if let protocolVersion = forProtocolVersion {
-                headers.add(name: "Sec-WebSocket-Version", value: protocolVersion)
-            }
-            if let key = usingKey {
-                headers.add(name: "Sec-WebSocket-Key", value: key)
-            }
-            if negotiateCompression {
-                var value = "permessage-deflate"
-                if let contextTakeover = contextTakeover {
-                   value.append("; \(contextTakeover.header())")
-                }
-                headers.add(name: "Sec-WebSocket-Extensions", value: value)
-            }
-            request.headers = headers
-            channel.write(NIOAny(HTTPClientRequestPart.head(request)), promise: nil)
-            try channel.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil))).wait()
-            return channel
-        } catch let error {
-            Log.error("Error: \(error)")
-            XCTFail("Sending the upgrade request failed")
-            return nil
-        }
-    }
-
-    static func checkUpgradeResponse(_ httpStatusCode: HTTPStatusCode, _ secWebAccept: String, _ forKey: String) {
-        XCTAssertEqual(httpStatusCode, HTTPStatusCode.switchingProtocols,
-                       "Returned status code on upgrade request was \(httpStatusCode) and not \(HTTPStatusCode.switchingProtocols)")
-
-        let sha1 = Digest(using: .sha1)
-        let key: String = forKey + KituraTest.wsGUID
-        let sha1Bytes = sha1.update(string: key)!.final()
-        let sha1Data = NSData(bytes: sha1Bytes, length: sha1Bytes.count)
-        let secWebAcceptExpected = sha1Data.base64EncodedString(options: .lineLength64Characters)
-
-        XCTAssertEqual(secWebAccept, secWebAcceptExpected,
-                       "The Sec-WebSocket-Accept header value was [\(secWebAccept)] and not the expected value of [\(secWebAcceptExpected)]")
-    }
-
-    static func checkUpgradeFailureResponse(_ httpStatusCode: HTTPStatusCode, _ errorMessage: String) {
-        XCTAssertEqual(httpStatusCode, HTTPStatusCode.badRequest,
-                       "Returned status code on upgrade request was \(httpStatusCode) and not \(HTTPStatusCode.badRequest)")
+    func createClient(negotiateCompression: Bool = false, uri: String = "/wstester" ,
+                      contextTakeover: ContextTakeover = .both, requestKey: String = "test") -> WebSocketClient? {
+        guard let client = WebSocketClient(host: "localhost", port: 8080, uri: uri, requestKey: requestKey,
+                                           negotiateCompression: negotiateCompression ,contextTakeover: contextTakeover) else { return nil }
+        client.connect()
+        return client
     }
 
     func expectation(line: Int, index: Int) -> XCTestExpectation {
         return self.expectation(description: "\(type(of: self)):\(line)[\(index)]")
     }
-}
 
-class HTTPResponseHandler: ChannelInboundHandler {
-
-    public typealias InboundIn = HTTPClientResponsePart
-
-    let errorMessage: String?
-
-    let key: String
-
-    let upgradeDoneOrRefused: DispatchSemaphore
-
-    public init(key: String, semaphore: DispatchSemaphore, errorMessage: String? = nil) {
-        self.key = key
-        self.upgradeDoneOrRefused = semaphore
-        self.errorMessage = errorMessage
-    }
-
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        let response = self.unwrapInboundIn(data)
-        switch response {
-        case .head(let header):
-            let statusCode = HTTPStatusCode(rawValue: Int(header.status.code))!
-            let secWebSocketAccept = header.headers["Sec-WebSocket-Accept"]
-            if let errorMessage = errorMessage {
-                KituraTest.checkUpgradeFailureResponse(statusCode, errorMessage)
-            } else {
-                XCTAssertEqual(secWebSocketAccept.count, 1, "Upgrade to WebSocket failed")
-                if secWebSocketAccept.count > 0 {
-                    KituraTest.checkUpgradeResponse(statusCode, secWebSocketAccept[0], key)
-                    upgradeDoneOrRefused.signal()
-                }
-            }
-        case .body(let buffer):
-            XCTAssertEqual(buffer.getString(at: 0, length: buffer.readableBytes) ?? "", errorMessage ?? "No error message")
-            upgradeDoneOrRefused.signal()
-        default: break
-        }
+    func register(onPath: String? = nil, closeReason: WebSocketCloseReasonCode, testServerRequest: Bool = false, pingMessage: String? = nil, testQueryParams: Bool = false, connectionTimeout: Int? = nil) {
+        let service = TestWebSocketService(closeReason: closeReason, testServerRequest: testServerRequest, pingMessage: pingMessage, testQueryParams: testQueryParams, connectionTimeout: connectionTimeout)
+        WebSocket.register(service: service, onPath: onPath ?? servicePath)
     }
 }
 
@@ -245,6 +92,3 @@ extension Bool {
         self = !self
     }
 }
-
-// We'd want to able to remove HTTPResponseHandler by hand, following a successful upgrade to WebSocket
-extension HTTPResponseHandler: RemovableChannelHandler { }
