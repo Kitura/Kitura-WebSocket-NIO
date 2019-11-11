@@ -92,7 +92,9 @@ class WebSocketClient {
     var closeSent: Bool = false
 
     // Whether the client is still alive
-    public var isConnected: Bool = false
+    public var isConnected: Bool {
+        return channel?.isActive ?? false
+    }
 
     public func connect() {
         do {
@@ -208,7 +210,6 @@ class WebSocketClient {
         do {
             let jsonData = try jsonEncoder.encode(model)
             let string = String(data: jsonData, encoding: .utf8)!
-            print("String:",string)
             var buffer = ByteBufferAllocator().buffer(capacity: string.count)
             buffer.writeString(string)
             sendMessage(data: buffer, opcode: opcode, finalFrame: finalFrame, compressed: compressed)
@@ -382,10 +383,6 @@ class WebSocketMessageHandler: ChannelInboundHandler, RemovableChannelHandler {
         client.close()
     }
 
-    public func channelInactive(context: ChannelHandlerContext) {
-        client.isConnected = context.channel.isActive
-    }
-
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let frame = self.unwrapInboundIn(data)
         switch frame.opcode {
@@ -441,7 +438,6 @@ class HTTPClientHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
 
     func channelActive(context: ChannelHandlerContext) {
-        client.isConnected = context.channel.isActive
         var request = HTTPRequestHead(version: HTTPVersion.http11, method: .GET, uri: client.uri)
         var headers = HTTPHeaders()
         headers.add(name: "Host", value: "\(client.host):\(client.port)")
