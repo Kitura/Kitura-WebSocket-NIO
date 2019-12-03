@@ -20,6 +20,7 @@ import NIOWebSocket
 import Foundation
 import NIOHTTP1
 import LoggerAPI
+import NIOConcurrencyHelpers
 
 public class WebSocketConnection {
 
@@ -48,6 +49,8 @@ public class WebSocketConnection {
     private var waitingForPong: Bool = false
     
     private var errors : [String] = []
+
+    private var disconnectedFired: Bool = false
 
     init(request: ServerRequest, service: WebSocketService? = nil) {
         self.request = request
@@ -280,6 +283,12 @@ extension WebSocketConnection: ChannelInboundHandler {
             connectionClosed(reason: .protocolError, description: "Frames must be smaller than the configured maximum acceptable frame size")
         }
     }
+    public func channelInactive(context: ChannelHandlerContext) {
+        if disconnectedFired == false {
+            service?.disconnected(connection: self, reason: .noReasonCodeSent)
+            disconnectedFired = true
+        }
+    }
 
     private func unmaskedData(frame: WebSocketFrame) -> ByteBuffer {
        var frameData = frame.data
@@ -320,16 +329,17 @@ extension WebSocketConnection: ChannelInboundHandler {
         return true
     }
 }
-
 extension WebSocketConnection {
-
     func connectionClosed(reason: WebSocketErrorCode, description: String? = nil, reasonToSendBack: WebSocketErrorCode? = nil) {
         guard let context = context else {
              return
         }
         if context.channel.isWritable {
-             closeConnection(reason: reasonToSendBack ?? reason, description: description, hard: true)
-             fireDisconnected(reason: reason)
+            closeConnection(reason: reasonToSendBack ?? reason, description: description, hard: true)
+            if disconnectedFired == false {
+                fireDisconnected(reason: reason)
+                disconnectedFired = true
+            }
         } else {
             context.close(promise: nil)
         }

@@ -22,6 +22,7 @@ import KituraNet
 
 class TestWebSocketService: WebSocketService {
     private var _connectionId = ""
+    private var _disconnectClientId = [String]()
     let closeReason: WebSocketCloseReasonCode
     let pingMessage: String?
     let testServerRequest: Bool
@@ -52,9 +53,13 @@ class TestWebSocketService: WebSocketService {
         }
     }
 
+    internal let queue = DispatchQueue(label: "ClientIDArrayQueue")
+    public var connectClientId = [String]()
     public func connected(connection: WebSocketConnection) {
         connectionId = connection.id
-
+        queue.sync {
+            self.connectClientId.append(self.connectionId)
+        }
         if let pingMessage = pingMessage {
             if pingMessage.count > 0 {
                 connection.ping(withMessage: pingMessage)
@@ -100,10 +105,12 @@ class TestWebSocketService: WebSocketService {
             XCTFail("Failed to read from the body. Error=\(error)")
         }
     }
-
+    public var disconnectClientId = [String]()
     public func disconnected(connection: WebSocketConnection, reason: WebSocketCloseReasonCode) {
-        XCTAssertEqual(connectionId, connection.id, "Client ID from connect wasn't client ID from disconnect")
-        XCTAssertEqual(Int(closeReason.code()), Int(reason.code()), "Expected close reason code \(closeReason) is not equal to received reason code\(reason)")
+        queue.sync {
+            self.disconnectClientId.append(connection.id)
+        }
+        XCTAssertEqual(Int(closeReason.code()), Int(reason.code()), "Expected close reason code of \(closeReason) received \(reason)")
     }
 
     public func received(message: Data, from: WebSocketConnection) {

@@ -83,7 +83,7 @@ public class WSConnectionUpgradeFactory: ProtocolHandlerFactory {
         } else {
             path = "/" + thePath
         }
-        registryAccessQueue.sync {
+        _ = registryAccessQueue.sync {
             registry.removeValue(forKey: path)
         }
     }
