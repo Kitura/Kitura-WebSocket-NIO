@@ -17,10 +17,11 @@
 import Foundation
 import NIO
 import NIOHTTP1
+import NIOSSL
 import NIOWebSocket
 import Dispatch
 import XCTest
-@testable import KituraWebSocket
+import WebSocketCompression
 
 #if os(Linux)
     import Glibc
@@ -45,6 +46,8 @@ class WebSocketClient {
     //  Ensures that webSocket frames are sent on channel only after the connection is successfully upgraded to WebSocket Connection
 
     let upgraded = DispatchSemaphore(value: 0)
+
+    let callBackSync = DispatchQueue(label: "callback.sync.queue")
 
     // Create a new `WebSocketClient`.
     //
@@ -83,6 +86,18 @@ class WebSocketClient {
         self.contextTakeover = contextTakeover
         self.maxFrameSize = maxFrameSize
     }
+
+    public init?(_ urlString: String = "ws://localhost:8080/") {
+        self.requestKey = "test"
+        let url = URL(string: urlString)
+        self.host = (url!.host!)
+        self.port = (url!.port!)
+        self.uri = url!.path
+        self.maxFrameSize = 24
+        self.negotiateCompression = false
+        self.maxWindowBits = 15
+        self.contextTakeover = .both
+     }
 
     let group = wsClientGlobalELG
 
@@ -265,12 +280,13 @@ class WebSocketClient {
             self.upgraded.signal()
         }
         let slidingWindowBits = windowSize(header: response.headers)
-        let compressor = PermessageDeflateCompressor(maxWindowBits: slidingWindowBits,
-                                                     noContextTakeOver: self.contextTakeover.clientNoContextTakeover)
-        let decompressor = PermessageDeflateDecompressor(maxWindowBits: slidingWindowBits,
-                                                         noContextTakeOver: self.contextTakeover.serverNoContextTakeover)
+        let deflater = PermessageDeflateCompressor(noContextTakeOver: self.contextTakeover.clientNoContextTakeover,
+                                                   maxWindowBits: slidingWindowBits)
+        let inflater = PermessageDeflateDecompressor(noContextTakeOver: self.contextTakeover.serverNoContextTakeover,
+                                                     maxWindowBits: slidingWindowBits)
+        
         if self.negotiateCompression {
-            return channel.pipeline.addHandlers([compressor, decompressor, WebSocketMessageHandler(client: self)])
+            return channel.pipeline.addHandlers([WebSocketCompressor(deflater: deflater), WebSocketDecompressor(inflater: inflater), WebSocketMessageHandler(client: self)])
         } else {
             return channel.pipeline.addHandler(WebSocketMessageHandler(client: self))
         }
@@ -294,7 +310,7 @@ class WebSocketClient {
     }
 
     // Stored callbacks
-    var onOpenCallback: (Channel) -> Void = {_ in }
+    var onOpenCallback: (Channel) -> Void  = { _ in }
 
     var onCloseCallback: (Channel, ByteBuffer) -> Void = { _,_ in }
 
@@ -302,9 +318,24 @@ class WebSocketClient {
 
     var onPingCallback: (ByteBuffer) -> Void = { _ in }
 
-    var onPongCallback: (WebSocketOpcode, ByteBuffer) -> Void = { _,_ in}
+    var onPongCallback: (WebSocketOpcode, ByteBuffer) -> Void = { _,_ in }
 
-    var onErrorCallBack: (Error?, HTTPResponseStatus?) -> Void = { _,_  in }
+    var _errorCallBack: (Error?, HTTPResponseStatus?) -> Void = { _,_ in }
+
+    var onErrorCallBack: (Error?, HTTPResponseStatus?) -> Void {
+
+        get {
+            return callBackSync.sync {
+                return _errorCallBack
+            }
+        }
+        set {
+            _ = callBackSync.sync {
+                _errorCallBack = newValue
+            }
+        }
+    }
+
 
     // callback functions
     // These functions are called when client gets reply from another endpoint
@@ -321,35 +352,31 @@ class WebSocketClient {
     //
 
     public func onMessage(_ callback: @escaping (ByteBuffer) -> Void) {
-        executeOnEventLoop { self.onMessageCallback = callback }
+        self.executeOnEventLoop { self.onMessageCallback = callback }
     }
 
     public func onOpen(_ callback: @escaping (Channel) -> Void) {
-        executeOnEventLoop { self.onOpenCallback = callback }
+        self.executeOnEventLoop { self.onOpenCallback = callback }
     }
 
     public func onClose(_ callback: @escaping (Channel, ByteBuffer) -> Void) {
-        executeOnEventLoop { self.onCloseCallback = callback }
+        self.executeOnEventLoop { self.onCloseCallback = callback }
     }
 
     public func onPing(_ callback: @escaping (ByteBuffer) -> Void) {
-        executeOnEventLoop { self.onPingCallback = callback }
+        self.executeOnEventLoop { self.onPingCallback = callback }
     }
 
     public func onPong(_ callback: @escaping (WebSocketOpcode, ByteBuffer) -> Void) {
-        executeOnEventLoop { self.onPongCallback  = callback }
+        self.executeOnEventLoop { self.onPongCallback = callback }
     }
 
     public func onError(_ callback: @escaping (Error?, HTTPResponseStatus?) -> Void) {
-        self.onErrorCallBack  = callback
+        self.onErrorCallBack = callback
     }
 
     private func executeOnEventLoop(_ code: @escaping () -> Void) {
         self.channel?.eventLoop.execute(code)
-    }
-
-    fileprivate func disconnect()  {
-        // Do not close eventLoopGroup as it is shared globally between clients
     }
 }
 
@@ -433,7 +460,7 @@ class HTTPClientHandler: ChannelInboundHandler, RemovableChannelHandler {
     typealias InboundIn = HTTPClientResponsePart
     unowned var client: WebSocketClient
 
-    init( client: WebSocketClient) {
+    init(client: WebSocketClient) {
         self.client = client
     }
 
@@ -454,7 +481,25 @@ class HTTPClientHandler: ChannelInboundHandler, RemovableChannelHandler {
         let response = unwrapInboundIn(data)
         switch response {
         case .head(let header) :
-            upgradeFailure(status: header.status)
+            if let delegate = client.delegate {
+                switch header.status {
+                case .badRequest:
+                    delegate.onError(error: WebSocketClientError.badRequest, status: header.status)
+                case .notFound:
+                    delegate.onError(error: WebSocketClientError.webSocketUrlNotRegistered, status: header.status)
+                default :
+                    break
+                }
+            } else {
+                switch header.status {
+                case .badRequest:
+                    client.onErrorCallBack(WebSocketClientError.badRequest, header.status)
+                case .notFound:
+                    client.onErrorCallBack(WebSocketClientError.webSocketUrlNotRegistered, header.status)
+                default :
+                    break
+                }
+            }
         case .body(_):
             break
         case .end(_):
@@ -480,28 +525,6 @@ class HTTPClientHandler: ChannelInboundHandler, RemovableChannelHandler {
         return value
     }
 
-    func upgradeFailure(status: HTTPResponseStatus) {
-        if let delegate = client.delegate {
-            switch status {
-            case .badRequest:
-                delegate.onError(error: WebSocketClientError.badRequest, status: status)
-            case .notFound:
-                delegate.onError(error: WebSocketClientError.webSocketUrlNotRegistered, status: status)
-            default :
-                break
-            }
-        } else {
-            switch status {
-            case .badRequest:
-                client.onErrorCallBack(WebSocketClientError.badRequest, status)
-            case .notFound:
-                client.onErrorCallBack(WebSocketClientError.webSocketUrlNotRegistered, status)
-            default :
-                break
-            }
-        }
-        client.disconnect()
-    }
 }
 
 extension HTTPVersion {

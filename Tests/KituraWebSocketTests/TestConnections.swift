@@ -1,13 +1,7 @@
 import XCTest
 import Foundation
 import Dispatch
-import NIO
-import NIOWebSocket
-import NIOHTTP1
-
-import LoggerAPI
 @testable import KituraWebSocket
-import Socket
 
 class ConnectionTests: KituraTest {
 
@@ -23,16 +17,16 @@ class ConnectionTests: KituraTest {
             for _ in 0...100 {
                 guard let client = WebSocketClient(host: "localhost", port:8080 , uri: self.servicePath, requestKey: self.secWebKey) else { return }
                 client.connect()
-                client.onClose { channel, _ in
-                    service.queue.sync {
-                        guard service.disconnectClientId.count == 100 else { return }
-                    }
-                        XCTAssertEqual(service.connectClientId.sorted(),service.disconnectClientId.sorted(), "Client IDs from connect weren't client IDs from disconnect")
-                    expectation.fulfill()
-                }
                 client.close()
+                client.onClose { _, _ in
+                    service.queue.sync {
+                        if service.disconnectClientId.count == 101 {
+                            XCTAssertEqual(service.connectClientId.sorted(),service.disconnectClientId.sorted(), "Client IDs from connect weren't client IDs from disconnect")
+                            expectation.fulfill()
+                        }
+                    }
+                }
             }
-
         }
     }
 }
